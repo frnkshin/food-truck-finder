@@ -1,14 +1,15 @@
+// Package main provides entry point and command line program for food-truck-finder.
 package main
 
 import (
 	"fmt"
 	"food-truck-finder/pkg/foodtruck"
+	"github.com/SebastiaanKlippert/go-soda"
 	cli "github.com/urfave/cli/v2"
 	"log"
 	"os"
 	"strconv"
-	"github.com/eiannone/keyboard"
-	tm "github.com/buger/goterm"
+	"time"
 )
 
 const (
@@ -17,8 +18,13 @@ const (
 	SortFlagName   = "sort"
 	FormatFlagName = "format"
 	TokenFlagName  = "token"
+	OpenNowStatement = `dayofweekstr='%s' AND start24<='%s' AND end24>'%s'`
+	SodasHHMMFormat = "%d:%d"
 )
 
+
+// Main runs the main program. It uses cli library to process all parameters given
+// to the application at runtime, and as well as sets default values for params.
 func main() {
 	app := &cli.App{
 		Name:  "food-truck-finder",
@@ -67,11 +73,9 @@ func main() {
 						Usage:   "returns all listings of food trucks",
 						Action: func(ctx *cli.Context) error {
 							client := foodtruck.NewClient(ctx.String(URLFlagName), ctx.Uint(LimitFlagName), ctx.Bool(SortFlagName), ctx.String(FormatFlagName), ctx.String(TokenFlagName))
-							client.GetFoodtrucks(func(trucks *foodtruck.FoodTrucks) {
-								for _, truck := range *trucks {
-									fmt.Println(truck.String())
-								}
-							})
+							hhmm := getCurrentHHMM(SodasHHMMFormat)
+							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetOrder("applicant", soda.DirAsc).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm))
+							client.GetFoodtrucksPaginated(*requestMetadata, handleShowAllView)
 							return nil
 						},
 					},
@@ -81,27 +85,9 @@ func main() {
 						Usage:   "returns listings of fodd trucks that are open now",
 						Action: func(ctx *cli.Context) error {
 							client := foodtruck.NewClient(ctx.String(URLFlagName), ctx.Uint(LimitFlagName), ctx.Bool(SortFlagName), ctx.String(FormatFlagName), ctx.String(TokenFlagName))
-							client.GetFoodtrucksPaginated(func(trucks *foodtruck.FoodTrucks) {
-								tm.Clear()
-								for _, truck := range *trucks {
-									fmt.Println(truck.String())
-									tm.Flush()
-								}
-								fmt.Println("Press any key to show next results\nPress Q to quit")
-								char, _, err := keyboard.GetSingleKey()
-								if (err != nil) {
-									panic(err)
-								}
-								switch char {
-									case 'q', 'Q':
-										fmt.Println("Pressed Q -- Quitting program")
-										os.Exit(0)
-										break
-									default:
-										tm.Clear()
-										return
-								}
-							})
+							hhmm := getCurrentHHMM(SodasHHMMFormat)
+							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetOrder("applicant", soda.DirAsc).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm))
+							client.GetFoodtrucksPaginated(*requestMetadata, handlePaginatedView)
 							return nil
 						},
 					},

@@ -15,11 +15,12 @@ import (
 const (
 	URLFlagName    = "url"
 	LimitFlagName  = "limit"
-	SortFlagName   = "sort"
+	SortFlagName   = "asc"
 	FormatFlagName = "format"
 	TokenFlagName  = "token"
 	OpenNowStatement = `dayofweekstr='%s' AND start24<='%s' AND end24>'%s'`
 	SodasHHMMFormat = "%d:%d"
+	SortColumn = "applicant"
 )
 
 
@@ -44,7 +45,7 @@ func main() {
 			},
 			&cli.BoolFlag{
 				Name:        SortFlagName,
-				Usage:       "Boolean value to sort listings",
+				Usage:       "Boolean value to sort listings by applicant (name). true = asc, false = desc",
 				Value:       foodtruck.DefaultSorted,
 				DefaultText: strconv.FormatBool(foodtruck.DefaultSorted),
 			},
@@ -74,7 +75,10 @@ func main() {
 						Action: func(ctx *cli.Context) error {
 							client := foodtruck.NewClient(ctx.String(URLFlagName), ctx.Uint(LimitFlagName), ctx.Bool(SortFlagName), ctx.String(FormatFlagName), ctx.String(TokenFlagName))
 							hhmm := getCurrentHHMM(SodasHHMMFormat)
-							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetOrder("applicant", soda.DirAsc).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm))
+							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm)).SetOrder(SortColumn, soda.DirDesc)
+							if client.Sorted() {
+								requestMetadata = requestMetadata.SetOrder(SortColumn, soda.DirAsc)
+							}
 							client.GetFoodtrucksPaginated(*requestMetadata, handleShowAllView)
 							return nil
 						},
@@ -86,7 +90,10 @@ func main() {
 						Action: func(ctx *cli.Context) error {
 							client := foodtruck.NewClient(ctx.String(URLFlagName), ctx.Uint(LimitFlagName), ctx.Bool(SortFlagName), ctx.String(FormatFlagName), ctx.String(TokenFlagName))
 							hhmm := getCurrentHHMM(SodasHHMMFormat)
-							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetOrder("applicant", soda.DirAsc).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm))
+							requestMetadata := foodtruck.NewRequestBuilder(client.BaseURL(), client.Token()).SetFormat(client.Format()).SetWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm)).SetOrder(SortColumn, soda.DirDesc)
+							if client.Sorted() {
+								requestMetadata = requestMetadata.SetOrder(SortColumn, soda.DirAsc)
+							}
 							client.GetFoodtrucksPaginated(*requestMetadata, handlePaginatedView)
 							return nil
 						},

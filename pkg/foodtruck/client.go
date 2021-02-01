@@ -84,3 +84,7 @@ func (c *client) Token() string {
 func (c *client) Format() string {
 	return c.format
 }
+
+func (c *client) Sorted() bool {
+	return c.sorted
+}

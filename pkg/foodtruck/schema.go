@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// FoodTrucks and FoodTrucks are Go structs used during
+// marshalling and unmarshalling of objects and json response.
 type FoodTruck struct {
 	Dayorder         string `json:"dayorder"`
 	Dayofweekstr     string `json:"dayofweekstr"`

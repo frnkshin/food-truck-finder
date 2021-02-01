@@ -3,122 +3,87 @@ package foodtruck
 import (
 	"encoding/json"
 	"fmt"
+	soda "github.com/SebastiaanKlippert/go-soda"
 	"io/ioutil"
 	"log"
-	"net/http"
-	"strings"
 	"time"
-	soda "github.com/SebastiaanKlippert/go-soda"
 )
 
 const (
-	DefaultBaseURL = "https://data.sfgov.org/resource/jjew-r69b.json"
+	DefaultBaseURL   = "https://data.sfgov.org/resource/jjew-r69b"
 	DefaultPageLimit = 10
-	DefaultSorted = true
-	DefaultTimeoutUnit = time.Second
+	DefaultSorted    = true
+	DefaultFormat    = "json"
+	DefaultToken     = ""
+	OpenNowStatement = `dayofweekstr='%s' AND start24<='%s' AND end24>'%s'`
 )
 
 type Bytes []byte
-
+type callback func(trucks *FoodTrucks)
 type client struct {
-	client *http.Client
-	config *config
-}
-
-type config struct {
 	baseURL string
-	limit uint
-	sorted bool
-	timeout time.Duration
+	limit   uint
+	sorted  bool
+	token   string
+	format  string
 }
 
-func NewClient(config *config) *client {
+func NewClient(baseURL string, limit uint, sorted bool, format string, token string) *client {
 	return &client{
-		client:  &http.Client{
-			Timeout: config.timeout,
-		},
-		config: config,
-	}
-}
-
-func NewConfig(baseURL string, limit uint, sorted bool, timeoutDuration time.Duration) *config {
-	return &config{
 		baseURL: baseURL,
 		limit:   limit,
 		sorted:  sorted,
-		timeout: timeoutDuration,
+		format:  format,
+		token:   token,
 	}
 }
 
-func (c *client) ToString() string {
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("baseURL: %s\n", c.config.baseURL))
-	builder.WriteString(fmt.Sprintf("limit: %d\n", c.config.limit))
-	builder.WriteString(fmt.Sprintf("sorted: %t\n", c.config.sorted))
-	builder.WriteString(fmt.Sprintf("timeout %s", c.config.timeout))
-	return builder.String()
-}
-
-func (c *client) fetch(url string) (Bytes, error) {
-	resp, err := c.client.Get(url)
+func (c *client) GetFoodtrucks(cb callback) {
+	hhmm := getCurrentHHMM("%d:%d")
+	requestBuilder := NewRequestBuilder(c.baseURL, c.token).setFormat(c.format).setOrder("applicant", soda.DirAsc).setWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm))
+	resp, err := requestBuilder.getRequest.Get()
 	if err != nil {
-		log.Print(err)
-		return nil, err
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
-	return body, nil
+	var trucks FoodTrucks
+	if err := json.Unmarshal(body, &trucks); err != nil {
+		log.Fatal(err)
+	}
+	cb(&trucks)
 }
 
-func (c *client) Get(query map[string]string) (FoodTrucks, error) {
-	req, err := http.NewRequest("GET", c.config.baseURL, nil)
-	if err != nil {
-		log.Print(err)
-		return nil, err
+func (c *client) GetFoodtrucksPaginated(cb callback) {
+	hhmm := getCurrentHHMM("%d:%d")
+	requestBuilder := NewRequestBuilder(c.baseURL, c.token).setFormat(c.format).setOrder("applicant", soda.DirAsc).setWhere(fmt.Sprintf(OpenNowStatement, time.Now().Weekday(), hhmm, hhmm)).wrapWithOffsetRequest()
+	offsetGetRequest := requestBuilder.offsetGetRequest
+	for !offsetGetRequest.IsDone() {
+		offsetGetRequest.Add(1)
+		resp, err := offsetGetRequest.Next(c.limit)
+		if err == soda.ErrDone {
+			log.Println("All trucks are printed")
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		var trucks FoodTrucks
+		if err := json.Unmarshal(body, &trucks); err != nil {
+			log.Fatal(err)
+		}
+		cb(&trucks)
+
+		offsetGetRequest.Done()
+		resp.Body.Close()
 	}
-
-	q := req.URL.Query()
-	for key, element := range query {
-		q.Add(key, element)
-	}
-	req.URL.RawQuery = q.Encode()
-	if body, err := c.fetch(req.URL.String()); err != nil {
-		return nil, err
-	} else {
-		return body.toJson(&FoodTrucks{})
-	}
-}
-
-func (c *client) GetOpenFoodTrucks(query map[string]string) (FoodTrucks, error) {
-	req, err := http.NewRequest("GET", c.getQuerySupportedURL(), nil)
-	if err != nil {
-		log.Print(err)
-		return nil, err
-	}
-
-	q := req.URL.Query()
-	q.Add("dayofweekstr", time.Now().Weekday().String())
-	q.Add("start24", string(time.Now().Hour()))
-	q.Add("end24", string(time.Now().Hour()))
-	req.URL.RawQuery = q.Encode()
-	fmt.Println(req.URL.RawQuery)
-
-	if body, err := c.fetch(req.URL.String()); err != nil {
-		return nil, err
-	} else {
-		return body.toJson(&FoodTrucks{})
-	}
-}
-
-func (c *client) getQuerySupportedURL() string {
-	return c.config.baseURL + "$where="
-}
-
-func (b Bytes) toJson(trucks *FoodTrucks) (FoodTrucks, error) {
-	err := json.Unmarshal(b, &trucks)
-	return *trucks, err
 }

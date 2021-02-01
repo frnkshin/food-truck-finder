@@ -1,5 +1,10 @@
 package foodtruck
 
+import (
+	"fmt"
+	"strings"
+)
+
 type FoodTruck struct {
 	Dayorder         string `json:"dayorder"`
 	Dayofweekstr     string `json:"dayofweekstr"`
@@ -31,3 +36,13 @@ type FoodTruck struct {
 }
 
 type FoodTrucks []FoodTruck
+
+func (truck *FoodTruck) String() string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Name                 : %s\n", truck.Applicant)
+	fmt.Fprintf(&sb, "Description          : %s\n", truck.Optionaltext)
+	fmt.Fprintf(&sb, "Business Hour        : %s ~ %s on %s\n", truck.Starttime, truck.Endtime, truck.Dayofweekstr)
+	fmt.Fprintf(&sb, "Location Description : %s\n", truck.Locationdesc)
+	fmt.Fprintf(&sb, "Lat/Long             : %s, %s\n", truck.Latitude, truck.Longitude)
+	return sb.String()
+}
